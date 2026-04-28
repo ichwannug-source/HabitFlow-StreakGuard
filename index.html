@@ -6,9 +6,10 @@ import {
   Brain, Target, Info, Loader2, AlertCircle
 } from 'lucide-react';
 
-// --- Konfigurasi ---
+// --- Configuration & API ---
 const apiKey = ""; 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
 const THEMES = {
   modern: 'from-indigo-600 to-purple-600',
@@ -17,14 +18,16 @@ const THEMES = {
   midnight: 'from-slate-800 to-slate-900'
 };
 
+// --- Components ---
+
 const GrowthTree = ({ percentage, darkMode }) => {
   return (
     <div className="flex flex-col items-center justify-center p-4">
-      <svg width="100" height="100" viewBox="0 0 100 100" className="drop-shadow-md">
+      <svg width="100" height="100" viewBox="0 0 100 100" className="drop-shadow-md transition-all duration-1000">
         <ellipse cx="50" cy="90" rx="40" ry="8" fill={darkMode ? "#1e293b" : "#e2e8f0"} />
         {/* Trunk */}
-        {percentage >= 25 && (
-          <g>
+        {percentage >= 15 && (
+          <g className="animate-in fade-in zoom-in duration-700">
             <path d="M50 90 L50 60" stroke="#78350f" strokeWidth="4" />
             <path d="M50 75 L40 65" stroke="#78350f" strokeWidth="2" />
             <path d="M50 70 L60 62" stroke="#78350f" strokeWidth="2" />
@@ -32,7 +35,7 @@ const GrowthTree = ({ percentage, darkMode }) => {
         )}
         {/* Leaves */}
         {percentage >= 50 && (
-          <g>
+          <g className="animate-in fade-in zoom-in duration-1000">
             <circle cx="50" cy="50" r="18" fill="#22c55e" opacity="0.9" />
             <circle cx="40" cy="60" r="12" fill="#16a34a" opacity="0.9" />
             <circle cx="60" cy="60" r="12" fill="#16a34a" opacity="0.9" />
@@ -40,23 +43,23 @@ const GrowthTree = ({ percentage, darkMode }) => {
           </g>
         )}
         {/* Fruits/Flowers */}
-        {percentage >= 75 && (
-          <g>
+        {percentage >= 85 && (
+          <g className="animate-in fade-in zoom-in duration-1000 delay-300">
             <circle cx="42" cy="48" r="3" fill="#ef4444" />
             <circle cx="58" cy="45" r="3" fill="#ef4444" />
             <circle cx="50" cy="60" r="3" fill="#ef4444" />
           </g>
         )}
         {/* Sprout only */}
-        {percentage < 25 && (
-          <g>
+        {percentage < 15 && (
+          <g className="animate-in fade-in slide-in-from-bottom-2">
             <path d="M50 90 Q50 80 55 75" stroke="#4ade80" strokeWidth="3" fill="none" />
             <path d="M55 75 Q60 70 58 65 Q53 68 55 75" fill="#4ade80" />
           </g>
         )}
       </svg>
       <p className={`text-[9px] font-bold mt-2 uppercase tracking-widest ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-        {percentage < 25 ? "Fase Bibit" : percentage < 50 ? "Tumbuh" : percentage < 75 ? "Rindang" : "Panen Makna"}
+        {percentage < 25 ? "Fase Bibit" : percentage < 50 ? "Tumbuh" : percentage < 85 ? "Rindang" : "Panen Makna"}
       </p>
     </div>
   );
@@ -80,14 +83,13 @@ export default function App() {
     { id: 1, name: 'Meditasi 2 Menit', streak: 0, completed: false, note: '' }
   ]);
 
-  const [history, setHistory] = useState({});
   const [newHabitName, setNewHabitName] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiLabContent, setAiLabContent] = useState(null);
   const [showNotification, setShowNotification] = useState(null);
 
-  // Persistence Logic (In-Memory for this session, but we use the state)
+  // Reset logic for new day
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     if (user.lastLoginDate !== today) {
@@ -101,7 +103,6 @@ export default function App() {
     }
   }, [user.lastLoginDate]);
 
-  // Daily Progress Calculation
   const dailyProgress = useMemo(() => {
     if (habits.length === 0) return 0;
     const completedCount = habits.filter(h => h.completed).length;
@@ -113,24 +114,27 @@ export default function App() {
     setTimeout(() => setShowNotification(null), 3000);
   };
 
+  // --- API Handling with Exponential Backoff ---
   const askGemini = async (prompt, systemInstruction) => {
     setAiLoading(true);
     let retries = 0;
     const maxRetries = 5;
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+      systemInstruction: { parts: [{ text: systemInstruction }] }
+    };
 
     while (retries <= maxRetries) {
       try {
         const response = await fetch(GEMINI_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: { parts: [{ text: systemInstruction }] }
-          })
+          body: JSON.stringify(payload)
         });
-        
+
         if (!response.ok) throw new Error('API Error');
-        
+
         const result = await response.json();
         setAiLoading(false);
         return result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -185,7 +189,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 pb-28 ${user.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-500 pb-28 selection:bg-indigo-200 ${user.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       {/* Progress Bar Top */}
       <div className="h-1.5 w-full fixed top-0 z-50 bg-slate-200 dark:bg-slate-800">
         <div 
@@ -202,10 +206,10 @@ export default function App() {
         </div>
       )}
 
-      <div className="max-w-xl mx-auto px-6 pt-10">
+      <div className="max-w-xl mx-auto px-4 md:px-6 pt-10">
         <header className="flex justify-between items-center mb-10">
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${THEMES[user.theme]} flex items-center justify-center text-2xl shadow-lg ring-4 ring-white dark:ring-slate-800`}>
+            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${THEMES[user.theme]} flex items-center justify-center text-2xl shadow-lg ring-4 ring-white dark:ring-slate-800 transition-all hover:scale-105 cursor-pointer`}>
               {user.avatar}
             </div>
             <div>
@@ -220,9 +224,9 @@ export default function App() {
           </div>
           <button 
             onClick={() => setActiveTab('profile')} 
-            className={`p-3 rounded-2xl border transition-colors ${user.darkMode ? 'border-slate-800 bg-slate-900 hover:bg-slate-800' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
+            className={`p-3 rounded-2xl border transition-all active:scale-90 ${user.darkMode ? 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-400' : 'border-slate-100 bg-white hover:bg-slate-50 text-slate-400 shadow-sm'}`}
           >
-            <Settings className="w-5 h-5 text-slate-400" />
+            <Settings className="w-5 h-5" />
           </button>
         </header>
 
@@ -230,11 +234,11 @@ export default function App() {
           {activeTab === 'tracker' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Daily Card */}
-              <div className={`p-6 rounded-[2rem] border flex items-center justify-between ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
-                <div>
+              <div className={`p-6 rounded-[2.5rem] border flex flex-col sm:flex-row items-center justify-between gap-6 ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
+                <div className="text-center sm:text-left">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Target Hari Ini</h3>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r ${THEMES[user.theme]}`}>
+                  <div className="flex items-baseline justify-center sm:justify-start gap-2">
+                    <span className={`text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r ${THEMES[user.theme]}`}>
                       {Math.round(dailyProgress)}%
                     </span>
                   </div>
@@ -244,7 +248,7 @@ export default function App() {
               </div>
 
               {/* Add Habit Input */}
-              <div className={`p-6 rounded-[2rem] border ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
+              <div className={`p-6 rounded-[2.5rem] border ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <div className="flex flex-col gap-4">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -256,10 +260,11 @@ export default function App() {
                       />
                       <button 
                         onClick={handleAiStacking}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-indigo-500 hover:scale-110 transition-transform"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-indigo-500 hover:scale-110 transition-transform disabled:opacity-30"
                         title="AI Habit Stacking"
+                        disabled={!newHabitName || aiLoading}
                       >
-                        <Sparkles className="w-4 h-4" />
+                        {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -283,7 +288,8 @@ export default function App() {
                         notify("Habit baru ditambahkan!");
                       }
                     }} 
-                    className={`w-full py-4 rounded-2xl text-white text-sm font-bold bg-gradient-to-r ${THEMES[user.theme]} shadow-xl shadow-indigo-500/20 active:scale-[0.98] transition-all`}
+                    className={`w-full py-4 rounded-2xl text-white text-sm font-bold bg-gradient-to-r ${THEMES[user.theme]} shadow-xl shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:opacity-50`}
+                    disabled={!newHabitName}
                   >
                     Tambah Kebiasaan Baru
                   </button>
@@ -300,7 +306,7 @@ export default function App() {
                 )}
                 {habits.map(h => (
                   <div key={h.id} className="group animate-in slide-in-from-right-4 duration-300">
-                    <div className={`p-5 rounded-[1.8rem] border flex items-center justify-between transition-all ${h.completed ? 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/50' : user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
+                    <div className={`p-5 rounded-[2rem] border flex items-center justify-between transition-all ${h.completed ? 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/50' : user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                       <div className="flex items-center gap-4 flex-1">
                         <button 
                           onClick={() => toggleHabit(h.id)} 
@@ -308,8 +314,8 @@ export default function App() {
                         >
                           {h.completed ? <CheckCircle2 className="w-8 h-8" /> : <Circle className="w-8 h-8" />}
                         </button>
-                        <div>
-                          <p className={`font-bold text-sm ${h.completed ? 'text-emerald-700 dark:text-emerald-500 line-through opacity-60' : ''}`}>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold text-sm truncate ${h.completed ? 'text-emerald-700 dark:text-emerald-500 line-through opacity-60' : ''}`}>
                             {h.name}
                           </p>
                           <div className="flex items-center gap-2 text-[10px] font-bold text-orange-500 uppercase mt-1 tracking-wider">
@@ -334,7 +340,7 @@ export default function App() {
                         <textarea 
                           value={h.note} 
                           onChange={(e) => setHabits(habits.map(x => x.id === h.id ? {...x, note: e.target.value} : x))}
-                          placeholder="Kendala apa yang Anda hadapi?"
+                          placeholder="Kendala apa yang Anda hadapi hari ini?"
                           className="w-full bg-transparent text-[11px] outline-none resize-none placeholder:text-slate-400 font-medium"
                           rows="1"
                         />
@@ -354,7 +360,7 @@ export default function App() {
                 </div>
                 <h2 className="text-xl font-bold mb-2">Laboratorium AI ✨</h2>
                 <p className="text-xs text-slate-400 mb-8 px-8 leading-relaxed">
-                  AI akan menganalisis pola kegagalan dan keberhasilan Anda untuk memberikan solusi psikologis yang tepat sasaran.
+                  AI akan menganalisis pola kemajuan Anda untuk memberikan solusi psikologis yang tepat sasaran demi konsistensi maksimal.
                 </p>
                 <button 
                   onClick={handleAiLab} 
@@ -376,7 +382,7 @@ export default function App() {
           )}
 
           {activeTab === 'achievements' && (
-            <div className="text-center py-20 animate-in fade-in zoom-in-95">
+            <div className="text-center py-10 animate-in fade-in zoom-in-95">
               <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Award className="w-10 h-10 text-amber-500" />
               </div>
@@ -384,9 +390,9 @@ export default function App() {
               <p className="text-xs text-slate-400 mt-3 px-10">
                 Selesaikan tantangan 7 hari berturut-turut untuk membuka lencana pertama Anda!
               </p>
-              <div className="grid grid-cols-3 gap-4 mt-10">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className={`aspect-square rounded-3xl border-2 border-dashed flex items-center justify-center ${user.darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-10">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className={`aspect-square rounded-[2rem] border-2 border-dashed flex items-center justify-center ${user.darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                     <div className="opacity-20 grayscale scale-75">
                       <Award className="w-8 h-8" />
                     </div>
@@ -436,7 +442,7 @@ export default function App() {
                 </div>
               </div>
               
-              <div className={`p-6 rounded-[2rem] border ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+              <div className={`p-6 rounded-[2.5rem] border ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
                   <Info className="w-3 h-3" /> Statistik Global
                 </h3>
@@ -446,7 +452,7 @@ export default function App() {
                     <p className="text-lg font-black">{user.points}</p>
                   </div>
                   <div className="p-4 rounded-2xl bg-slate-500/5 border border-slate-500/10">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Level Saat Ini</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Level</p>
                     <p className="text-lg font-black">{user.level}</p>
                   </div>
                 </div>
