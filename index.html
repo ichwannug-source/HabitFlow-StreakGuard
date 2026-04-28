@@ -6,8 +6,21 @@ import {
   Brain, Target, Info, Loader2, AlertCircle
 } from 'lucide-react';
 
-// --- Configuration & API ---
-const apiKey = ""; 
+// --- Konfigurasi & API ---
+// Catatan untuk GitHub: Saat deploy dengan Vite, gunakan import.meta.env.VITE_GEMINI_API_KEY
+// Di lingkungan pratinjau ini, kita menggunakan string kosong agar sistem dapat menginjeksi kunci secara otomatis.
+const getApiKey = () => {
+  try {
+    // Mencoba mengakses env variable, jika gagal (lingkungan tidak mendukung import.meta), gunakan string kosong
+    return (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) 
+      ? import.meta.env.VITE_GEMINI_API_KEY 
+      : "";
+  } catch (e) {
+    return "";
+  }
+};
+
+const apiKey = getApiKey(); 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -18,14 +31,13 @@ const THEMES = {
   midnight: 'from-slate-800 to-slate-900'
 };
 
-// --- Components ---
-
+// --- Komponen Pohon Pertumbuhan (SVG Animasi) ---
 const GrowthTree = ({ percentage, darkMode }) => {
   return (
     <div className="flex flex-col items-center justify-center p-4">
       <svg width="100" height="100" viewBox="0 0 100 100" className="drop-shadow-md transition-all duration-1000">
         <ellipse cx="50" cy="90" rx="40" ry="8" fill={darkMode ? "#1e293b" : "#e2e8f0"} />
-        {/* Trunk */}
+        {/* Batang Pohon */}
         {percentage >= 15 && (
           <g className="animate-in fade-in zoom-in duration-700">
             <path d="M50 90 L50 60" stroke="#78350f" strokeWidth="4" />
@@ -33,7 +45,7 @@ const GrowthTree = ({ percentage, darkMode }) => {
             <path d="M50 70 L60 62" stroke="#78350f" strokeWidth="2" />
           </g>
         )}
-        {/* Leaves */}
+        {/* Daun */}
         {percentage >= 50 && (
           <g className="animate-in fade-in zoom-in duration-1000">
             <circle cx="50" cy="50" r="18" fill="#22c55e" opacity="0.9" />
@@ -42,7 +54,7 @@ const GrowthTree = ({ percentage, darkMode }) => {
             <circle cx="50" cy="40" r="12" fill="#4ade80" opacity="0.9" />
           </g>
         )}
-        {/* Fruits/Flowers */}
+        {/* Buah/Bunga */}
         {percentage >= 85 && (
           <g className="animate-in fade-in zoom-in duration-1000 delay-300">
             <circle cx="42" cy="48" r="3" fill="#ef4444" />
@@ -50,7 +62,7 @@ const GrowthTree = ({ percentage, darkMode }) => {
             <circle cx="50" cy="60" r="3" fill="#ef4444" />
           </g>
         )}
-        {/* Sprout only */}
+        {/* Tunas Awal */}
         {percentage < 15 && (
           <g className="animate-in fade-in slide-in-from-bottom-2">
             <path d="M50 90 Q50 80 55 75" stroke="#4ade80" strokeWidth="3" fill="none" />
@@ -67,21 +79,37 @@ const GrowthTree = ({ percentage, darkMode }) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('tracker');
-  const [user, setUser] = useState({
-    name: 'Sobat Habit',
-    bio: 'Berusaha menjadi 1% lebih baik setiap hari.',
-    avatar: '✨',
-    theme: 'modern',
-    points: 0,
-    level: 1,
-    darkMode: false,
-    aiTitle: 'Pemula',
-    lastLoginDate: new Date().toISOString().split('T')[0]
+  
+  // --- Inisialisasi State dari LocalStorage ---
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('habit_user');
+      return savedUser ? JSON.parse(savedUser) : {
+        name: 'Sobat Habit',
+        bio: 'Berusaha menjadi 1% lebih baik setiap hari.',
+        avatar: '✨',
+        theme: 'modern',
+        points: 0,
+        level: 1,
+        darkMode: false,
+        aiTitle: 'Pemula',
+        lastLoginDate: new Date().toISOString().split('T')[0]
+      };
+    } catch (e) {
+      return { name: 'Sobat Habit', points: 0, level: 1, darkMode: false, theme: 'modern', lastLoginDate: new Date().toISOString().split('T')[0] };
+    }
   });
 
-  const [habits, setHabits] = useState([
-    { id: 1, name: 'Meditasi 2 Menit', streak: 0, completed: false, note: '' }
-  ]);
+  const [habits, setHabits] = useState(() => {
+    try {
+      const savedHabits = localStorage.getItem('habit_list');
+      return savedHabits ? JSON.parse(savedHabits) : [
+        { id: 1, name: 'Meditasi 2 Menit', streak: 0, completed: false, note: '' }
+      ];
+    } catch (e) {
+      return [{ id: 1, name: 'Meditasi 2 Menit', streak: 0, completed: false, note: '' }];
+    }
+  });
 
   const [newHabitName, setNewHabitName] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -89,7 +117,16 @@ export default function App() {
   const [aiLabContent, setAiLabContent] = useState(null);
   const [showNotification, setShowNotification] = useState(null);
 
-  // Reset logic for new day
+  // --- Auto-Save ke LocalStorage ---
+  useEffect(() => {
+    localStorage.setItem('habit_user', JSON.stringify(user));
+  }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem('habit_list', JSON.stringify(habits));
+  }, [habits]);
+
+  // Logika reset harian
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     if (user.lastLoginDate !== today) {
@@ -114,8 +151,11 @@ export default function App() {
     setTimeout(() => setShowNotification(null), 3000);
   };
 
-  // --- API Handling with Exponential Backoff ---
+  // --- API Handling dengan Exponential Backoff ---
   const askGemini = async (prompt, systemInstruction) => {
+    // Di lingkungan pratinjau, apiKey mungkin diinjeksi meskipun string kosong di kode
+    const effectiveApiKey = apiKey || ""; 
+
     setAiLoading(true);
     let retries = 0;
     const maxRetries = 5;
@@ -190,7 +230,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen transition-colors duration-500 pb-28 selection:bg-indigo-200 ${user.darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      {/* Progress Bar Top */}
+      {/* Top Progress Bar */}
       <div className="h-1.5 w-full fixed top-0 z-50 bg-slate-200 dark:bg-slate-800">
         <div 
           className={`h-full bg-gradient-to-r ${THEMES[user.theme]} transition-all duration-700 ease-out`} 
@@ -233,7 +273,7 @@ export default function App() {
         <main>
           {activeTab === 'tracker' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Daily Card */}
+              {/* Daily Target Card */}
               <div className={`p-6 rounded-[2.5rem] border flex flex-col sm:flex-row items-center justify-between gap-6 ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <div className="text-center sm:text-left">
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Target Hari Ini</h3>
@@ -247,7 +287,7 @@ export default function App() {
                 <GrowthTree percentage={dailyProgress} darkMode={user.darkMode} />
               </div>
 
-              {/* Add Habit Input */}
+              {/* Add New Habit Section */}
               <div className={`p-6 rounded-[2.5rem] border ${user.darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <div className="flex flex-col gap-4">
                   <div className="flex gap-2">
@@ -462,7 +502,7 @@ export default function App() {
         </main>
       </div>
 
-      {/* Navigation Bottom Bar */}
+      {/* Bar Navigasi Bawah */}
       <nav className={`fixed bottom-0 left-0 right-0 border-t px-6 py-4 z-40 backdrop-blur-2xl ${user.darkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.03)]'}`}>
         <div className="max-w-xl mx-auto flex justify-between items-center px-2">
           {[
