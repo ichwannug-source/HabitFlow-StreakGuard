@@ -27,7 +27,7 @@
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         .animate-slide-up { animation: slideUp 0.5s ease-out forwards; }
         .animate-zoom-in { animation: zoomIn 0.3s ease-out forwards; }
     </style>
@@ -39,8 +39,8 @@
         const { useState, useEffect, useMemo } = React;
 
         // --- Konfigurasi ---
-        const apiKey = "AIzaSyCSxB2IU_WSKtROnJ4_XHf7ub7saIuWdjw"; // Isi API Key Anda di sini
-        const GEMINI_URL = 'gemini-2.5-flash';
+        // Biarkan kosong, environment platform ini akan menyisipkan API key secara otomatis
+        const apiKey = ""; 
 
         const THEMES = {
             modern: 'from-indigo-600 to-purple-600',
@@ -54,6 +54,7 @@
         // --- Utility: Fungsi AI ---
         const fetchGeminiWithRetry = async (prompt, systemInstruction, retries = 5) => {
             const delays = [1000, 2000, 4000, 8000, 16000];
+            const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             
             for (let i = 0; i < retries; i++) {
                 try {
@@ -71,7 +72,7 @@
                     const result = await response.json();
                     return result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, tidak ada respon.";
                 } catch (error) {
-                    if (i === retries - 1) return "Sistem AI sedang sibuk. Silakan coba lagi nanti.";
+                    if (i === retries - 1) return "Sistem AI sedang sibuk atau API key bermasalah. Silakan coba lagi nanti.";
                     await new Promise(res => setTimeout(res, delays[i]));
                 }
             }
@@ -121,18 +122,10 @@
             );
         };
 
-        const getTodayString = () => {
-            const d = new Date();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        };
-
         const App = () => {
             const [activeTab, setActiveTab] = useState('tracker');
-            const [todayDate, setTodayDate] = useState(getTodayString());
-            const [habitToDelete, setHabitToDelete] = useState(null); // State untuk Modal Hapus
-
             const [user, setUser] = useState(() => {
-                const saved = localStorage.getItem('habitflow_user_v6');
+                const saved = localStorage.getItem('habitflow_user_v7');
                 return saved ? JSON.parse(saved) : {
                     name: 'Sobat Habit',
                     avatar: '✨',
@@ -145,14 +138,14 @@
             });
 
             const [habits, setHabits] = useState(() => {
-                const saved = localStorage.getItem('habitflow_habits_v6');
+                const saved = localStorage.getItem('habitflow_habits_v7');
                 return saved ? JSON.parse(saved) : [
                     { id: 1, name: 'Meditasi 2 Menit', streak: 0, completed: false }
                 ];
             });
 
             const [history, setHistory] = useState(() => {
-                const saved = localStorage.getItem('habitflow_history_v6');
+                const saved = localStorage.getItem('habitflow_history_v7');
                 return saved ? JSON.parse(saved) : {};
             });
 
@@ -167,61 +160,17 @@
                 lucide.createIcons();
             });
 
-            // 1. Deteksi Pergantian Hari secara Dinamis
-            useEffect(() => {
-                const checkDate = () => {
-                    const newDate = getTodayString();
-                    if (newDate !== todayDate) {
-                        setTodayDate(newDate);
-                    }
-                };
-                const interval = setInterval(checkDate, 60000); // Cek tiap 1 menit
-                return () => clearInterval(interval);
-            }, [todayDate]);
+            const todayDate = useMemo(() => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }, []);
 
-            // 2. Logika Reset Harian Checklist & Penyesuaian Streak
             useEffect(() => {
-                const savedDate = localStorage.getItem('habitflow_last_date');
-                
-                if (savedDate && savedDate !== todayDate) {
-                    // Temukan tanggal kemarin untuk komparasi streak
-                    const [year, month, day] = todayDate.split('-').map(Number);
-                    const d = new Date(year, month - 1, day);
-                    d.setDate(d.getDate() - 1);
-                    const yesterdayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-                    setHabits(prevHabits => prevHabits.map(h => {
-                        let newStreak = h.streak;
-                        
-                        if (savedDate === yesterdayStr) {
-                            // Jika hari kemarin aplikasi dibuka, cek apakah habit ini diselesaikan kemarin
-                            if (!h.completed) {
-                                newStreak = 0; // Streak terputus
-                            }
-                        } else {
-                            // Jika aplikasi tidak dibuka berhari-hari, otomatis semua streak putus
-                            newStreak = 0;
-                        }
-                        
-                        // Reset completed hari ini menjadi false
-                        return { ...h, completed: false, streak: newStreak };
-                    }));
-                    
-                    localStorage.setItem('habitflow_last_date', todayDate);
-                } else if (!savedDate) {
-                    // Menandai login pertama kali
-                    localStorage.setItem('habitflow_last_date', todayDate);
-                }
-            }, [todayDate]);
-
-            // Menyimpan state ke local storage
-            useEffect(() => {
-                localStorage.setItem('habitflow_user_v6', JSON.stringify(user));
-                localStorage.setItem('habitflow_habits_v6', JSON.stringify(habits));
-                localStorage.setItem('habitflow_history_v6', JSON.stringify(history));
+                localStorage.setItem('habitflow_user_v7', JSON.stringify(user));
+                localStorage.setItem('habitflow_habits_v7', JSON.stringify(habits));
+                localStorage.setItem('habitflow_history_v7', JSON.stringify(history));
             }, [user, habits, history]);
 
-            // Memperbarui riwayat pencapaian harian (persentase selesai)
             useEffect(() => {
                 const total = habits.length;
                 const completedCount = habits.filter(h => h.completed).length;
@@ -240,14 +189,11 @@
                 });
             }, [habits, todayDate]);
 
-            // Memuat catatan harian
             useEffect(() => {
                 if (history[todayDate]?.note) {
                     setCurrentNote(history[todayDate].note);
-                } else {
-                    setCurrentNote(''); // Reset form jika hari berubah
                 }
-            }, [todayDate, history]);
+            }, [todayDate]);
 
             const saveNote = (text) => {
                 setCurrentNote(text);
@@ -279,26 +225,18 @@
             };
 
             const toggleHabit = (id) => {
-                setHabits(prevHabits => prevHabits.map(h => {
+                setHabits(habits.map(h => {
                     if (h.id === id) {
                         const isDone = !h.completed;
                         const ptsChange = isDone ? 15 : -15;
+                        const newPts = Math.max(0, user.points + ptsChange);
+                        const newLevel = Math.floor(newPts / 100) + 1;
                         
-                        // Pembaruan poin dan level user yang presisi
-                        setUser(prevUser => {
-                            const newPts = Math.max(0, prevUser.points + ptsChange);
-                            const newLevel = Math.floor(newPts / 100) + 1;
-                            
-                            const titles = ['Newbie', 'Explorer', 'Seeker', 'Achiever', 'Master', 'Legend'];
-                            const newTitle = titles[Math.min(titles.length - 1, Math.floor(newLevel / 2))] || 'Legend';
-                            
-                            return { ...prevUser, points: newPts, level: newLevel, aiTitle: newTitle };
-                        });
-                        
-                        // Tambah atau kurangi streak berdasarkan toggle hari ini
-                        const newStreak = isDone ? h.streak + 1 : Math.max(0, h.streak - 1);
-                        
-                        return { ...h, completed: isDone, streak: newStreak };
+                        const titles = ['Newbie', 'Explorer', 'Seeker', 'Achiever', 'Master', 'Legend'];
+                        const newTitle = titles[Math.min(titles.length - 1, Math.floor(newLevel / 2))] || 'Legend';
+
+                        setUser(prev => ({ ...prev, points: newPts, level: newLevel, aiTitle: newTitle }));
+                        return { ...h, completed: isDone, streak: isDone ? h.streak + 1 : Math.max(0, h.streak - 1) };
                     }
                     return h;
                 }));
@@ -306,45 +244,52 @@
 
             const addHabit = () => {
                 if (newHabitName.trim()) {
-                    setHabits(prev => [...prev, { id: Date.now(), name: newHabitName, streak: 0, completed: false }]);
+                    setHabits([...habits, { id: Date.now(), name: newHabitName, streak: 0, completed: false }]);
                     setNewHabitName('');
                     setAiSuggestion(null);
                 }
             };
 
-            const confirmDeleteHabit = (id) => {
-                setHabitToDelete(id);
-            };
-
-            const executeDeleteHabit = () => {
-                if (habitToDelete) {
-                    setHabits(prev => prev.filter(x => x.id !== habitToDelete));
-                    setHabitToDelete(null);
+            const deleteHabit = (id) => {
+                if(window.confirm('Yakin ingin menghapus habit ini?')) {
+                    setHabits(habits.filter(x => x.id !== id));
                 }
             };
 
             const calendarDays = useMemo(() => {
-                const [year, month, day] = todayDate.split('-').map(Number);
-                const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const firstDayOfMonth = new Date(year, month, 1).getDay();
                 const adjustedFirstDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; 
-                const daysInMonth = new Date(year, month, 0).getDate();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
                 
                 const days = [];
                 for (let i = 0; i < adjustedFirstDay; i++) days.push(null);
                 for (let d = 1; d <= daysInMonth; d++) {
-                    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     days.push({ day: d, dateStr, data: history[dateStr] });
                 }
                 return days;
-            }, [history, todayDate]);
+            }, [history]);
 
+            // Sistem Pengecekan Prestasi (Achievements)
             const achievements = useMemo(() => {
                 const highestStreak = habits.reduce((max, h) => Math.max(max, h.streak), 0);
+                const habitsWith21Streak = habits.filter(h => h.streak >= 21).length;
+                const habitsWith40Streak = habits.filter(h => h.streak >= 40).length;
+
                 return [
                     { id: 'level2', icon: '🚀', title: 'Pecah Telur', desc: 'Mencapai Level 2', unlocked: user.level >= 2 },
                     { id: 'streak3', icon: '🔥', title: 'Mulai Panas', desc: 'Mencapai 3 hari streak', unlocked: highestStreak >= 3 },
                     { id: 'streak7', icon: '⭐', title: 'Konsisten 1 Minggu', desc: 'Mencapai 7 hari streak', unlocked: highestStreak >= 7 },
-                    { id: 'perfect_day', icon: '🏆', title: 'Hari Sempurna', desc: '100% habit dalam sehari', unlocked: history[todayDate]?.status === 'perfect' }
+                    { id: 'streak21', icon: '🌱', title: 'Membentuk Habit', desc: 'Mencapai 21 hari streak', unlocked: highestStreak >= 21 },
+                    { id: 'streak40', icon: '👑', title: 'Master Habit', desc: 'Mencapai 40 hari streak', unlocked: highestStreak >= 40 },
+                    { id: 'combo2_21', icon: '🥈', title: 'Double Combo (21)', desc: '2 kebiasaan 21 hari streak', unlocked: habitsWith21Streak >= 2 },
+                    { id: 'combo2_40', icon: '🛡️', title: 'Double Master (40)', desc: '2 kebiasaan 40 hari streak', unlocked: habitsWith40Streak >= 2 },
+                    { id: 'combo3_21', icon: '🥇', title: 'Triple Threat (21)', desc: '3 kebiasaan 21 hari streak', unlocked: habitsWith21Streak >= 3 },
+                    { id: 'combo3_40', icon: '💎', title: 'Habit Legend (40)', desc: '3 kebiasaan 40 hari streak', unlocked: habitsWith40Streak >= 3 },
+                    { id: 'perfect_day', icon: '🏆', title: 'Hari Sempurna', desc: '100% habit selesai dalam sehari', unlocked: history[todayDate]?.status === 'perfect' }
                 ];
             }, [user.level, habits, history, todayDate]);
 
@@ -352,7 +297,7 @@
 
             // Render JSX
             return (
-                <div className={`min-h-screen transition-colors duration-500 pb-24 ${user.darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} font-sans relative`}>
+                <div className={`min-h-screen transition-colors duration-500 pb-24 ${user.darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} font-sans`}>
                     <div className="h-1.5 w-full fixed top-0 z-50 bg-slate-200 dark:bg-slate-800">
                         <div className={`h-full bg-gradient-to-r ${THEMES[user.theme]} transition-all duration-700`} style={{ width: `${(user.points % 100)}%` }}></div>
                     </div>
@@ -450,7 +395,7 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => confirmDeleteHabit(h.id)} className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 p-2">
+                                                    <button onClick={() => deleteHabit(h.id)} className="text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 p-2">
                                                         <i data-lucide="trash-2" className="w-4 h-4"></i>
                                                     </button>
                                                 </div>
@@ -487,7 +432,6 @@
                                                 let colorClass = user.darkMode ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-400';
                                                 if (d.data?.status === 'perfect') colorClass = 'bg-emerald-500 text-white shadow-sm';
                                                 else if (d.data?.status === 'partial') colorClass = 'bg-amber-400 text-white shadow-sm';
-                                                
                                                 const isToday = d.dateStr === todayDate;
                                                 if (isToday && colorClass.includes('bg-slate')) {
                                                     colorClass = user.darkMode ? 'bg-slate-600 text-white border border-slate-500' : 'bg-white text-slate-800 border-2 border-indigo-200';
@@ -617,30 +561,6 @@
                             })}
                         </div>
                     </nav>
-
-                    {/* Modal Konfirmasi Hapus Kebiasaan */}
-                    {habitToDelete && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-                            <div className={`w-full max-w-xs p-6 rounded-3xl shadow-2xl animate-zoom-in ${user.darkMode ? 'bg-slate-800 text-white border border-slate-700' : 'bg-white text-slate-900'}`}>
-                                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4 text-red-500 mx-auto">
-                                    <i data-lucide="alert-triangle" className="w-6 h-6"></i>
-                                </div>
-                                <h3 className="text-lg font-bold mb-2 text-center">Hapus Kebiasaan?</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 text-center leading-relaxed">
-                                    Semua data *streak* untuk habit ini akan hilang selamanya.
-                                </p>
-                                <div className="flex gap-3">
-                                    <button onClick={() => setHabitToDelete(null)} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors">
-                                        Batal
-                                    </button>
-                                    <button onClick={executeDeleteHabit} className="flex-1 py-3.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 shadow-md shadow-red-500/20 transition-colors">
-                                        Ya, Hapus
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                 </div>
             );
         };
